@@ -20,13 +20,22 @@ auth_router = Router()
 def register(request, payload: UserRegisterSchema):
     if User.objects.filter(username=payload.username).exists():
         return 400, {"message": "Email already registered"}
-    user = User.objects.create_user(
-        username=payload.username,
-        email=payload.username,  # Use email as username
-        password=payload.password,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-    )
+
+    # Create a dictionary with the required fields
+    user_data = {
+        "username": payload.username,
+        "email": payload.username,
+        "password": payload.password,
+    }
+
+    # Only add optional fields if they were provided
+    if payload.first_name:
+        user_data["first_name"] = payload.first_name
+    if payload.last_name:
+        user_data["last_name"] = payload.last_name
+
+    user = User.objects.create_user(**user_data)
+
     return 201, {"message": "User created successfully"}
 
 

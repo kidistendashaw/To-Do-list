@@ -15,15 +15,17 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       try {
         const decoded = jwtDecode(token);
-        // Check if token is expired
         const isExpired = decoded.exp * 1000 < Date.now();
         if (!isExpired) {
-          setUser({ id: decoded.user_id, username: decoded.username });
+          // We need to store the username here. Since we don't have it on reload,
+          // we'll have to either store it in localStorage or re-decode it.
+          // For simplicity, let's also store the username in localStorage.
+          const storedUsername = localStorage.getItem("username");
+          setUser({ id: decoded.user_id, username: storedUsername });
         } else {
           logout();
         }
       } catch (error) {
-        console.error("Invalid token:", error);
         logout();
       }
     }
@@ -39,12 +41,17 @@ export const AuthProvider = ({ children }) => {
       const { access, refresh } = response.data;
       localStorage.setItem("accessToken", access);
       localStorage.setItem("refreshToken", refresh);
+
+      // This is the key change. We store the username from the form.
+      localStorage.setItem("username", username);
+
       const decoded = jwtDecode(access);
-      setUser({ id: decoded.user_id, username: decoded.username });
+      // Now we set the user state with the username we KNOW is correct.
+      setUser({ id: decoded.user_id, username: username });
+
       navigate("/");
     } catch (error) {
       console.error("Login failed", error);
-      // Propagate the error so the form can display it
       throw error;
     }
   };
@@ -52,11 +59,12 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("username"); // Also clear the username
     setUser(null);
     navigate("/login");
   };
 
-  const value = { user, login, logout, isAuthenticated: !!user };
+  const value = { user, login, logout, isAuthenticated: !!user, loading };
 
   return (
     <AuthContext.Provider value={value}>

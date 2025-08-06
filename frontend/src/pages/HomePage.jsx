@@ -2,24 +2,36 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import apiClient from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/solid";
+import {
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  ArrowLeftOnRectangleIcon,
+} from "@heroicons/react/24/outline";
 
 const HomePage = () => {
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
-  const [filter, setFilter] = useState(""); // '', 'IN_PROGRESS', 'COMPLETED'
-  const [editingTask, setEditingTask] = useState(null); // The task object being edited
+  const [filter, setFilter] = useState("");
+  const [editingTask, setEditingTask] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { register, handleSubmit, reset, setValue } = useForm();
 
   useEffect(() => {
-    fetchTasks();
-  }, [filter]);
+    if (user) {
+      fetchTasks();
+    }
+  }, [filter, user]);
 
   const fetchTasks = async () => {
     try {
       const params = filter ? { status: filter } : {};
       const response = await apiClient.get("/tasks/", { params });
-      setTasks(response.data);
+      setTasks(
+        response.data.sort(
+          (a, b) => new Date(a.created_at) - new Date(b.created_at)
+        )
+      );
     } catch (error) {
       console.error("Failed to fetch tasks", error);
     }
@@ -28,15 +40,13 @@ const HomePage = () => {
   const onSubmit = async (data) => {
     try {
       if (editingTask) {
-        // Update existing task
         await apiClient.put(`/tasks/${editingTask.id}`, data);
-        setEditingTask(null);
       } else {
-        // Create new task
         await apiClient.post("/tasks/", data);
       }
-      fetchTasks();
+      setEditingTask(null);
       reset();
+      fetchTasks();
     } catch (error) {
       console.error("Failed to save task", error);
     }
@@ -54,6 +64,7 @@ const HomePage = () => {
         await apiClient.delete(`/tasks/${taskId}`);
         fetchTasks();
       } catch (error) {
+        // This is the line that has been corrected.
         console.error("Failed to delete task", error);
       }
     }
@@ -68,25 +79,80 @@ const HomePage = () => {
     }
   };
 
+  const handleLogout = () => {
+    setIsLoggingOut(true);
+    logout();
+  };
+
+  const getFirstName = () => {
+    // =========================================================================
+    // === LET'S SEE THE EVIDENCE RIGHT BEFORE WE USE IT ===
+    console.log("Inside getFirstName. The full 'user' object is:", user);
+    if (user) {
+      console.log("The 'user.username' property is:", user.username);
+    }
+    // =========================================================================
+
+    if (!user || !user.username) {
+      // This is the line that is being triggered. Let's find out why.
+      return "User";
+    }
+
+    const email = user.username;
+    const firstPart = email.split("@")[0];
+    return firstPart.charAt(0).toUpperCase() + firstPart.slice(1);
+  };
+
   return (
-    <div className="bg-gray-100 min-h-screen">
-      <nav className="bg-white shadow-md p-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">To-Do List</h1>
-        <div>
-          <span className="mr-4">Welcome, {user.username}</span>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-slate-800 text-white font-sans">
+      <nav className="p-4 flex justify-between items-center container mx-auto border-b border-white/10">
+        <h1 className="text-2xl font-bold tracking-wider">To-Do List</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-slate-300 hidden sm:block">
+            Welcome, {getFirstName()}
+          </span>
           <button
-            onClick={logout}
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center justify-center gap-2 bg-red-600/80 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-all duration-200 font-semibold transform hover:scale-105 disabled:opacity-70 disabled:scale-100"
           >
-            Logout
+            {isLoggingOut ? (
+              <>
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <span>Logging out...</span>
+              </>
+            ) : (
+              <>
+                <ArrowLeftOnRectangleIcon className="h-5 w-5" />
+                <span>Logout</span>
+              </>
+            )}
           </button>
         </div>
       </nav>
 
-      <div className="container mx-auto p-4 max-w-3xl">
-        {/* Form Section */}
-        <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-          <h2 className="text-2xl font-bold mb-4">
+      <main className="container mx-auto p-4 max-w-3xl">
+        <div className="bg-white/5 backdrop-blur-sm p-6 rounded-xl shadow-lg border border-white/10">
+          <h2 className="text-2xl font-semibold mb-4 text-slate-100">
             {editingTask ? "Edit Task" : "Add a New Task"}
           </h2>
           <form
@@ -97,19 +163,18 @@ const HomePage = () => {
               type="text"
               placeholder="Task title"
               {...register("title", { required: true })}
-              className="flex-grow px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-grow px-4 py-2 bg-slate-700/50 rounded-lg border-none focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             />
             <input
               type="date"
               {...register("deadline", { required: true })}
-              className="px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-4 py-2 bg-slate-700/50 rounded-lg border-none focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             />
             <button
               type="submit"
-              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center"
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 flex items-center justify-center gap-2 font-semibold transform hover:scale-105"
             >
-              <PlusIcon className="h-5 w-5 mr-2" />{" "}
-              {editingTask ? "Update" : "Add"}
+              <PlusIcon className="h-5 w-5" /> {editingTask ? "Update" : "Add"}
             </button>
             {editingTask && (
               <button
@@ -118,7 +183,7 @@ const HomePage = () => {
                   setEditingTask(null);
                   reset();
                 }}
-                className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
+                className="bg-slate-600 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition-all"
               >
                 Cancel
               </button>
@@ -126,46 +191,48 @@ const HomePage = () => {
           </form>
         </div>
 
-        {/* Filter Section */}
-        <div className="mb-4 flex items-center gap-4">
-          <h3 className="font-semibold">Filter by status:</h3>
-          <button
-            onClick={() => setFilter("")}
-            className={`px-4 py-1 rounded-full text-sm ${
-              filter === "" ? "bg-blue-500 text-white" : "bg-gray-200"
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter("IN_PROGRESS")}
-            className={`px-4 py-1 rounded-full text-sm ${
-              filter === "IN_PROGRESS"
-                ? "bg-yellow-500 text-white"
-                : "bg-gray-200"
-            }`}
-          >
-            In Progress
-          </button>
-          <button
-            onClick={() => setFilter("COMPLETED")}
-            className={`px-4 py-1 rounded-full text-sm ${
-              filter === "COMPLETED" ? "bg-green-500 text-white" : "bg-gray-200"
-            }`}
-          >
-            Completed
-          </button>
-        </div>
+        <div className="mt-8">
+          <div className="flex items-center gap-4 mb-4">
+            <h3 className="font-semibold text-slate-300">Filter by:</h3>
+            <button
+              onClick={() => setFilter("")}
+              className={`px-4 py-1 rounded-full text-sm font-medium transition-all ${
+                filter === ""
+                  ? "bg-blue-600 text-white"
+                  : "bg-white/10 hover:bg-white/20"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilter("IN_PROGRESS")}
+              className={`px-4 py-1 rounded-full text-sm font-medium transition-all ${
+                filter === "IN_PROGRESS"
+                  ? "bg-amber-500 text-white"
+                  : "bg-white/10 hover:bg-white/20"
+              }`}
+            >
+              In Progress
+            </button>
+            <button
+              onClick={() => setFilter("COMPLETED")}
+              className={`px-4 py-1 rounded-full text-sm font-medium transition-all ${
+                filter === "COMPLETED"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-white/10 hover:bg-white/20"
+              }`}
+            >
+              Completed
+            </button>
+          </div>
 
-        {/* Task List */}
-        <div className="bg-white rounded-lg shadow-md">
-          <ul className="divide-y divide-gray-200">
+          <ul className="space-y-3">
             {tasks.map((task) => (
               <li
                 key={task.id}
-                className="p-4 flex items-center justify-between"
+                className="bg-white/5 p-4 rounded-lg flex items-center justify-between transition-all duration-300 hover:bg-white/10 hover:shadow-lg"
               >
-                <div className="flex items-center">
+                <div className="flex items-center gap-4">
                   <input
                     type="checkbox"
                     checked={task.status === "COMPLETED"}
@@ -177,19 +244,21 @@ const HomePage = () => {
                           : "COMPLETED"
                       )
                     }
-                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-4"
+                    className="h-5 w-5 rounded bg-slate-700 border-slate-600 text-blue-500 focus:ring-blue-600 cursor-pointer"
                   />
-                  <div>
+                  <div
+                    className={`transition-opacity ${
+                      task.status === "COMPLETED" ? "opacity-50" : ""
+                    }`}
+                  >
                     <p
-                      className={`font-semibold ${
-                        task.status === "COMPLETED"
-                          ? "line-through text-gray-500"
-                          : ""
+                      className={`font-semibold text-slate-100 ${
+                        task.status === "COMPLETED" ? "line-through" : ""
                       }`}
                     >
                       {task.title}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-slate-400">
                       Deadline: {task.deadline}
                     </p>
                   </div>
@@ -197,13 +266,13 @@ const HomePage = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(task)}
-                    className="p-2 text-gray-500 hover:text-blue-600"
+                    className="p-2 text-slate-400 hover:text-blue-400 transition-colors"
                   >
                     <PencilIcon className="h-5 w-5" />
                   </button>
                   <button
                     onClick={() => handleDelete(task.id)}
-                    className="p-2 text-gray-500 hover:text-red-600"
+                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                   >
                     <TrashIcon className="h-5 w-5" />
                   </button>
@@ -212,7 +281,7 @@ const HomePage = () => {
             ))}
           </ul>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

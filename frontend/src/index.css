@@ -1,1 +1,5 @@
 @import "tailwindcss";
+:root {
+  /* ... other styles ... */
+  --vite-logo: url("/vite.svg"); /* This kind of line is the problem */
+}
